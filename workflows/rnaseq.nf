@@ -40,15 +40,15 @@ if (!params.skip_alignment) { prepareToolIndices << params.aligner }
 if (!params.skip_pseudo_alignment && params.pseudo_aligner) { prepareToolIndices << params.pseudo_aligner }
 
 // Determine whether to filter the GTF or not
-def filterGtf = 
+def filterGtf =
     ((
         // Condition 1: Alignment is required and aligner is set
         !params.skip_alignment && params.aligner
-    ) || 
+    ) ||
     (
         // Condition 2: Pseudoalignment is required and pseudoaligner is set
         !params.skip_pseudo_alignment && params.pseudo_aligner
-    ) || 
+    ) ||
     (
         // Condition 3: Transcript FASTA file is not provided
         !params.transcript_fasta
@@ -140,6 +140,10 @@ include { SORTMERNA                   } from '../modules/nf-core/sortmerna'
 include { STRINGTIE_STRINGTIE         } from '../modules/nf-core/stringtie/stringtie'
 include { SUBREAD_FEATURECOUNTS       } from '../modules/nf-core/subread/featurecounts'
 include { CUSTOM_DUMPSOFTWAREVERSIONS } from '../modules/nf-core/custom/dumpsoftwareversions'
+include { KRAKEN2_KRAKEN2 as KRAKEN2  } from '../modules/nf-core/kraken2/kraken2/main'
+include { BRACKEN_BRACKEN as BRACKEN  } from '../modules/nf-core/bracken/bracken/main'
+include { KRAKEN2_BUILD               } from '../modules/nf-core/kraken2/build/main'
+include { BRACKEN_BUILD               } from '../modules/nf-core/bracken/build/main'
 
 //
 // SUBWORKFLOW: Consisting entirely of nf-core/modules
@@ -347,11 +351,11 @@ workflow RNASEQ {
         ch_sortmerna_multiqc = SORTMERNA.out.log
         ch_versions = ch_versions.mix(SORTMERNA.out.versions.first())
     }
-    
+
     //
     // SUBWORKFLOW: Sub-sample FastQ files and pseudoalign with Salmon to auto-infer strandedness
     //
-    
+
     // Branch FastQ channels if 'auto' specified to infer strandedness
     ch_filtered_reads
         .branch {
@@ -400,6 +404,7 @@ workflow RNASEQ {
     ch_samtools_stats             = Channel.empty()
     ch_samtools_flagstat          = Channel.empty()
     ch_samtools_idxstats          = Channel.empty()
+    ch_unaligned_sequences        = Channel.empty()
     ch_star_multiqc               = Channel.empty()
     ch_aligner_pca_multiqc        = Channel.empty()
     ch_aligner_clustering_multiqc = Channel.empty()
@@ -414,13 +419,14 @@ workflow RNASEQ {
             is_aws_igenome,
             PREPARE_GENOME.out.fasta.map { [ [:], it ] }
         )
-        ch_genome_bam        = ALIGN_STAR.out.bam
-        ch_genome_bam_index  = ALIGN_STAR.out.bai
-        ch_transcriptome_bam = ALIGN_STAR.out.bam_transcript
-        ch_samtools_stats    = ALIGN_STAR.out.stats
-        ch_samtools_flagstat = ALIGN_STAR.out.flagstat
-        ch_samtools_idxstats = ALIGN_STAR.out.idxstats
-        ch_star_multiqc      = ALIGN_STAR.out.log_final
+        ch_genome_bam          = ALIGN_STAR.out.bam
+        ch_genome_bam_index    = ALIGN_STAR.out.bai
+        ch_transcriptome_bam   = ALIGN_STAR.out.bam_transcript
+        ch_samtools_stats      = ALIGN_STAR.out.stats
+        ch_samtools_flagstat   = ALIGN_STAR.out.flagstat
+        ch_samtools_idxstats   = ALIGN_STAR.out.idxstats
+        ch_unaligned_sequences = ALIGN_STAR.out.fastq
+        ch_star_multiqc        = ALIGN_STAR.out.log_final
         if (params.bam_csi_index) {
             ch_genome_bam_index = ALIGN_STAR.out.csi
         }
@@ -563,12 +569,13 @@ workflow RNASEQ {
             PREPARE_GENOME.out.splicesites.map { [ [:], it ] },
             PREPARE_GENOME.out.fasta.map { [ [:], it ] }
         )
-        ch_genome_bam        = FASTQ_ALIGN_HISAT2.out.bam
-        ch_genome_bam_index  = FASTQ_ALIGN_HISAT2.out.bai
-        ch_samtools_stats    = FASTQ_ALIGN_HISAT2.out.stats
-        ch_samtools_flagstat = FASTQ_ALIGN_HISAT2.out.flagstat
-        ch_samtools_idxstats = FASTQ_ALIGN_HISAT2.out.idxstats
-        ch_hisat2_multiqc    = FASTQ_ALIGN_HISAT2.out.summary
+        ch_genome_bam          = FASTQ_ALIGN_HISAT2.out.bam
+        ch_genome_bam_index    = FASTQ_ALIGN_HISAT2.out.bai
+        ch_samtools_stats      = FASTQ_ALIGN_HISAT2.out.stats
+        ch_samtools_flagstat   = FASTQ_ALIGN_HISAT2.out.flagstat
+        ch_samtools_idxstats   = FASTQ_ALIGN_HISAT2.out.idxstats
+        ch_unaligned_sequences = FASTQ_ALIGN_HISAT2.out.fastq
+        ch_hisat2_multiqc      = FASTQ_ALIGN_HISAT2.out.summary
         if (params.bam_csi_index) {
             ch_genome_bam_index = FASTQ_ALIGN_HISAT2.out.csi
         }
@@ -752,6 +759,7 @@ workflow RNASEQ {
     ch_readduplication_multiqc    = Channel.empty()
     ch_fail_strand_multiqc        = Channel.empty()
     ch_tin_multiqc                = Channel.empty()
+    ch_bracken_multiqc            = Channel.empty()
     if (!params.skip_alignment && !params.skip_qc) {
         if (!params.skip_qualimap) {
             QUALIMAP_RNASEQ (
@@ -812,6 +820,26 @@ workflow RNASEQ {
                 }
                 .set { ch_fail_strand_multiqc }
         }
+
+        //TODO Add Kraken2 and Bracken to workflow. Include kraken/bracken build if needed
+        if (!params.skip_kraken2) {
+            KRAKEN2 (
+                ch_unaligned_sequences,
+                params.kraken_db,
+                false, //TODO Not saving read alignments. Should this be modifiable?
+                false
+            )
+
+            ch_kraken_reports = KRAKEN2.out.report
+            ch_versions = ch_versions.mix(KRAKEN2.out.versions) //TODO .first()?
+
+            BRACKEN (
+                ch_kraken_reports,
+                kraken_db
+            )
+            ch_versions = ch_versions.mix(BRACKEN.out.versions) //TODO .first()?
+            ch_bracken_multiqc = BRACKEN.out.reports
+        }
     }
 
     //
@@ -819,14 +847,14 @@ workflow RNASEQ {
     //
     ch_pseudo_multiqc                   = Channel.empty()
     ch_pseudoaligner_pca_multiqc        = Channel.empty()
-    ch_pseudoaligner_clustering_multiqc = Channel.empty()    
+    ch_pseudoaligner_clustering_multiqc = Channel.empty()
     if (!params.skip_pseudo_alignment && params.pseudo_aligner) {
 
-       if (params.pseudo_aligner == 'salmon') {
-           ch_pseudo_index = PREPARE_GENOME.out.salmon_index
-       } else {
-           ch_pseudo_index = PREPARE_GENOME.out.kallisto_index
-       }
+        if (params.pseudo_aligner == 'salmon') {
+            ch_pseudo_index = PREPARE_GENOME.out.salmon_index
+        } else {
+            ch_pseudo_index = PREPARE_GENOME.out.kallisto_index
+        }
 
         QUANTIFY_PSEUDO_ALIGNMENT (
             ch_strand_inferred_filtered_fastq,
@@ -854,7 +882,7 @@ workflow RNASEQ {
             ch_versions = ch_versions.mix(DESEQ2_QC_PSEUDO.out.versions)
         }
     }
-    
+
     //
     // MODULE: Pipeline reporting
     //
@@ -910,6 +938,7 @@ workflow RNASEQ {
             ch_readdistribution_multiqc.collect{it[1]}.ifEmpty([]),
             ch_readduplication_multiqc.collect{it[1]}.ifEmpty([]),
             ch_tin_multiqc.collect{it[1]}.ifEmpty([])
+            ch_bracken_multiqc.collect{it[1]}.ifEmpty([]) //TODO Should this have {it[1]}?
         )
         multiqc_report = MULTIQC.out.report.toList()
     }
@@ -925,7 +954,7 @@ workflow.onComplete {
     if (params.email || params.email_on_fail) {
         NfcoreTemplate.email(workflow, params, summary_params, projectDir, log, multiqc_report, pass_mapped_reads, pass_trimmed_reads, pass_strand_check)
     }
-    
+
     NfcoreTemplate.dump_parameters(workflow, params)
     NfcoreTemplate.summary(workflow, params, log, pass_mapped_reads, pass_trimmed_reads, pass_strand_check)
 
