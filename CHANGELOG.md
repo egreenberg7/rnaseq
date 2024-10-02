@@ -3,12 +3,28 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v3.16.0dev - [date]
+## [[3.16.0](https://github.com/nf-core/rnaseq/releases/tag/3.16.0)] - 2024-10-02
+
+### Credits
+
+Special thanks to the following for their contributions to the release:
+
+- [Adam Talbot](https://github.com/adamrtalbot)
+- [Ezra Greenberg](https://github.com/egreenberg7)
+- [Jonathan Manning](https://github.com/pinin4fjords)
+- [Matthias Zepper](https://github.com/MatthiasZepper)
+- [Maxime Garcia](https://github.com/maxulysse)
+- [Paolo Di Tommaso](https://github.com/pditommaso)
+- [Phil Ewels](https://github.com/ewels)
+- [Shaun Regenbaum](https://github.com/Shaun-Regenbaum)
 
 ### Enhancements & fixes
 
-- [PR #1388](https://github.com/nf-core/rnaseq/pull/1351) - Adding Kraken2/Bracken on unaligned reads as an additional quality control step to detect sample contamination
-- [PR #1186](https://github.com/nf-core/rnaseq/pull/1186) - Bump pipeline version to 3.16.0dev
+- [PR #1376](https://github.com/nf-core/rnaseq/pull/1376) - Fix invalid named parameter syntax
+- [PR #1386](https://github.com/nf-core/rnaseq/pull/1386) - Bump pipeline version to 3.16.0dev
+- [PR #1388](https://github.com/nf-core/rnaseq/pull/1388) - Adding Kraken2/Bracken on unaligned reads as an additional quality control step to detect sample contamination
+- [PR #1389](https://github.com/nf-core/rnaseq/pull/1389) - Update animated subway map
+- [PR #1393](https://github.com/nf-core/rnaseq/pull/1393) - Use quay.io for bedtools/genomecov to solve issue with nf-core download
 
 ### Parameters
 
@@ -42,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Enhancements & fixes
 
 - [PR #1374](https://github.com/nf-core/rnaseq/pull/1374) - Bump pipeline version to 3.16.0dev
+- [PR #1379](https://github.com/nf-core/rnaseq/pull/1379) - Enhance pipeline level test snapshots
 - [PR #1380](https://github.com/nf-core/rnaseq/pull/1380) - Fix issues with R modules changing sample names
 - [PR #1381](https://github.com/nf-core/rnaseq/pull/1381) - Update all modules following massive conda usage update in nf-core modules
 - [PR #1382](https://github.com/nf-core/rnaseq/pull/1381) - Slight fixes for rnaseq preprocessing
